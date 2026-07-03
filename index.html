@@ -837,7 +837,6 @@
     38%{ transform:rotateX(-48deg); }
     62%{ transform:rotateX(-78deg); }
     82%{ transform:rotateX(-96deg); }
-    100%{ transform:rotateX(-108deg); }
   }
   @keyframes chestLockBreak{
     0%{ transform:translateY(0) scale(1); opacity:1; }
@@ -937,21 +936,21 @@
     opacity:0;
   }
   @keyframes fairyMoteSwirl{
-    0%{ opacity:0; transform:translate(var(--sx), var(--sy)) scale(.15) rotate(0deg); filter:blur(3px); }
-    28%{ opacity:.9; transform:translate(calc(var(--sx) * .55), calc(var(--sy) * .55)) scale(.85) rotate(calc(var(--spin) * .3)); filter:blur(1px); }
-    58%{ opacity:1; transform:translate(calc(var(--tx) * .35), calc(var(--ty) * .35)) scale(1) rotate(calc(var(--spin) * .65)); filter:blur(0); }
-    82%{ opacity:.75; transform:translate(calc(var(--tx) * .08), calc(var(--ty) * .08)) scale(.55) rotate(var(--spin)); }
-    100%{ opacity:0; transform:translate(0, 0) scale(0) rotate(calc(var(--spin) * 1.2)); filter:blur(2px); }
+    0%{ opacity:0; transform:translate(0,0) scale(.15) rotate(0deg); filter:blur(0); }
+    16%{ opacity:1; transform:translate(calc(var(--tx) * .1), calc(var(--ty) * .1)) scale(.7) rotate(calc(var(--spin) * .12)); }
+    48%{ opacity:.95; transform:translate(calc(var(--tx) * .55), calc(var(--ty) * .55)) scale(1) rotate(calc(var(--spin) * .45)); }
+    100%{ opacity:0; transform:translate(var(--tx), var(--ty)) scale(.35) rotate(var(--spin)); filter:blur(1px); }
   }
 
   .question-wrap--pending{
     position:absolute; left:0; right:0; margin:auto;
     opacity:0; pointer-events:none;
-    transform:translateY(48px) scale(.9); filter:blur(14px);
+    transform:scale(.2); filter:blur(16px);
   }
   .question-wrap.is-revealed{
     position:relative; opacity:1; pointer-events:auto;
-    animation:questionEnchantReveal 2.5s cubic-bezier(.16,1,.3,1) forwards;
+    transform-origin:center center;
+    animation:questionEnchantReveal 2.2s cubic-bezier(.16,1,.3,1) forwards;
   }
   .question-wrap.is-revealed::before{
     content:''; position:absolute; left:50%; top:50%;
@@ -963,16 +962,16 @@
     animation:questionAura 2.6s cubic-bezier(.16,1,.3,1) forwards;
   }
   @keyframes questionAura{
-    0%{ opacity:0; transform:translate(-50%,-50%) scale(.5); }
-    35%{ opacity:1; transform:translate(-50%,-50%) scale(1.05); }
-    100%{ opacity:.55; transform:translate(-50%,-50%) scale(1.18); }
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(0); }
+    28%{ opacity:1; transform:translate(-50%,-50%) scale(.65); }
+    62%{ opacity:.9; transform:translate(-50%,-50%) scale(1.12); }
+    100%{ opacity:.5; transform:translate(-50%,-50%) scale(1.35); }
   }
   @keyframes questionEnchantReveal{
-    0%{ opacity:0; transform:translateY(52px) scale(.9); filter:blur(16px); }
-    38%{ opacity:.25; transform:translateY(28px) scale(.94); filter:blur(10px); }
-    62%{ opacity:.72; transform:translateY(10px) scale(.98); filter:blur(4px); }
-    82%{ opacity:.96; transform:translateY(-3px) scale(1.006); filter:blur(.5px); }
-    100%{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
+    0%{ opacity:0; transform:scale(.22); filter:blur(16px); }
+    32%{ opacity:.45; transform:scale(.68); filter:blur(7px); }
+    58%{ opacity:.88; transform:scale(1.06); filter:blur(2px); }
+    100%{ opacity:1; transform:scale(1); filter:blur(0); }
   }
   .question-wrap.is-revealed .question{
     animation:questionShimmer 2.8s cubic-bezier(.16,1,.3,1) .7s both;
@@ -1650,29 +1649,39 @@
     let noBuzzLast = 0;
     let noBuzzEmojiEl = null;
     let buzzAudioCtx = null;
+    let buzzAudioPrimed = false;
 
-    function playQuietBuzzer(){
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    async function primeBuzzAudio(){
+      if (buzzAudioPrimed) return;
       try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
         if (!buzzAudioCtx) buzzAudioCtx = new Ctx();
-        if (buzzAudioCtx.state === 'suspended') buzzAudioCtx.resume();
+        if (buzzAudioCtx.state === 'suspended') await buzzAudioCtx.resume();
+        buzzAudioPrimed = buzzAudioCtx.state === 'running';
+      } catch (_) {}
+    }
+
+    async function playQuietBuzzer(){
+      try {
+        await primeBuzzAudio();
+        if (!buzzAudioCtx || buzzAudioCtx.state !== 'running') return;
         const t = buzzAudioCtx.currentTime;
         const osc = buzzAudioCtx.createOscillator();
         const gain = buzzAudioCtx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(196, t);
-        osc.frequency.exponentialRampToValueAtTime(128, t + 0.11);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(210, t);
+        osc.frequency.exponentialRampToValueAtTime(145, t + 0.1);
         gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.038, t + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+        gain.gain.exponentialRampToValueAtTime(0.1, t + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
         osc.connect(gain);
         gain.connect(buzzAudioCtx.destination);
         osc.start(t);
-        osc.stop(t + 0.14);
+        osc.stop(t + 0.15);
       } catch (_) {}
     }
+    document.addEventListener('pointerdown', () => { primeBuzzAudio(); }, { once: true, passive: true });
 
     function spawnNoBuzzEmoji(clientX, clientY){
       if (!noBuzzEmojiEl) {
@@ -2000,12 +2009,9 @@
         const mote = document.createElement('span');
         mote.className = 'fairy-dust__mote';
         const angle = Math.random() * Math.PI * 2;
-        const startDist = 100 + Math.random() * 140;
-        const endDist = 24 + Math.random() * 48;
-        mote.style.setProperty('--sx', Math.cos(angle) * startDist + 'px');
-        mote.style.setProperty('--sy', Math.sin(angle) * startDist + 'px');
-        mote.style.setProperty('--tx', Math.cos(angle + 0.8) * endDist + 'px');
-        mote.style.setProperty('--ty', Math.sin(angle + 0.8) * endDist + 'px');
+        const endDist = 110 + Math.random() * 150;
+        mote.style.setProperty('--tx', Math.cos(angle) * endDist + 'px');
+        mote.style.setProperty('--ty', Math.sin(angle) * endDist + 'px');
         mote.style.setProperty('--spin', (Math.random() * 360 - 180) + 'deg');
         mote.style.setProperty('--size', (4 + Math.random() * 6) + 'px');
         mote.style.setProperty('--delay', (Math.random() * 0.55) + 's');
@@ -2018,6 +2024,7 @@
     function openQuestionBox(){
       if (questionOpened) return;
       questionOpened = true;
+      primeBuzzAudio();
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       questionBoxHint.hidden = true;
       questionBox.classList.add('opening');
@@ -2279,6 +2286,7 @@
     recordPlayBtn.setAttribute('aria-label', 'Play If It Is You');
 
     recordPlayBtn.addEventListener('click', async () => {
+      primeBuzzAudio();
       if (recordAudio.paused) {
         cancelEclipsePlayback();
         try {
