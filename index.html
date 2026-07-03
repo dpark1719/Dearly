@@ -1670,6 +1670,9 @@
     let buzzBuffer = null;
     let buzzHtmlAudio = null;
     let eoheoAudio = null;
+    let eoheoBuffer = null;
+    let eoheoLoadPromise = null;
+    let noBuzzMusicCut = false;
 
     function gameShowBuzzSample(t, duration){
       const progress = Math.min(t / duration, 1);
@@ -1727,6 +1730,27 @@
       return new Blob([buffer], { type: 'audio/wav' });
     }
 
+    function loadEoheoBuffer(){
+      if (eoheoBuffer) return Promise.resolve(eoheoBuffer);
+      if (eoheoLoadPromise) return eoheoLoadPromise;
+      if (!buzzAudioCtx) return Promise.resolve(null);
+      eoheoLoadPromise = fetch('eoheo.wav')
+        .then((res) => {
+          if (!res.ok) throw new Error('eoheo fetch failed');
+          return res.arrayBuffer();
+        })
+        .then((buf) => buzzAudioCtx.decodeAudioData(buf))
+        .then((decoded) => {
+          eoheoBuffer = decoded;
+          return decoded;
+        })
+        .catch(() => null)
+        .finally(() => {
+          eoheoLoadPromise = null;
+        });
+      return eoheoLoadPromise;
+    }
+
     function primeBuzzAudio(){
       if (!buzzHtmlAudio) {
         buzzHtmlAudio = new Audio(URL.createObjectURL(createBuzzWavBlob()));
@@ -1738,6 +1762,7 @@
         if (!buzzAudioCtx) buzzAudioCtx = new Ctx();
         if (!buzzBuffer) buzzBuffer = synthesizeBuzzBuffer(buzzAudioCtx);
         buzzAudioCtx.resume();
+        loadEoheoBuffer();
         try {
           const unlock = buzzAudioCtx.createBufferSource();
           unlock.buffer = buzzBuffer;
@@ -1789,12 +1814,54 @@
       if (!playBuzzWithWebAudio(0.92)) playBuzzWithHtmlAudio(0.95);
     }
 
+    function playEoheoFromBuffer(){
+      if (!buzzAudioCtx || !eoheoBuffer) return false;
+      if (buzzAudioCtx.state === 'suspended') buzzAudioCtx.resume();
+      try {
+        const src = buzzAudioCtx.createBufferSource();
+        src.buffer = eoheoBuffer;
+        const gain = buzzAudioCtx.createGain();
+        gain.gain.value = 1;
+        src.connect(gain);
+        gain.connect(buzzAudioCtx.destination);
+        src.start();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function playEoheo(){
+      if (playEoheoFromBuffer()) return;
+      const tryBuffer = () => { playEoheoFromBuffer(); };
+      if (eoheoLoadPromise) {
+        eoheoLoadPromise.then(tryBuffer);
+      } else {
+        loadEoheoBuffer().then(tryBuffer);
+      }
       if (!eoheoAudio) eoheoAudio = document.getElementById('eoheoAudio');
-      const src = eoheoAudio && eoheoAudio.src ? eoheoAudio.src : 'eoheo.wav';
-      const clip = new Audio(src);
-      clip.volume = 0.98;
+      const clip = new Audio((eoheoAudio && eoheoAudio.src) || 'eoheo.wav');
+      clip.volume = 1;
       clip.play().catch(() => {});
+    }
+
+    function cutMusicForNoBuzz(){
+      if (noBuzzMusicCut) return;
+      noBuzzMusicCut = true;
+      if (typeof cancelAudioCrossfade === 'function') cancelAudioCrossfade();
+      if (typeof cancelWalkCrossfade === 'function') cancelWalkCrossfade();
+      ['recordAudio', 'eclipseAudio', 'walkAudio'].forEach((id) => {
+        const track = document.getElementById(id);
+        if (track && !track.paused) track.pause();
+      });
+      const recordPlayerEl = document.getElementById('recordPlayer');
+      const recordPlayBtnEl = document.getElementById('recordPlayBtn');
+      if (recordPlayerEl) recordPlayerEl.classList.remove('is-playing');
+      if (recordPlayBtnEl) {
+        recordPlayBtnEl.textContent = 'play';
+        recordPlayBtnEl.setAttribute('aria-pressed', 'false');
+        recordPlayBtnEl.setAttribute('aria-label', 'Play If It Is You');
+      }
     }
     document.addEventListener('pointerdown', primeBuzzAudio, { once: true, passive: true });
 
@@ -1823,6 +1890,7 @@
       const now = performance.now();
       if (now - noBuzzLast < 1100) return;
       noBuzzLast = now;
+      cutMusicForNoBuzz();
       playWrongAnswerBuzz();
       window.setTimeout(playEoheo, 300);
       spawnNoBuzzEmoji(clientX, clientY);
