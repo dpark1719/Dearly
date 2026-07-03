@@ -237,7 +237,7 @@
     transition:opacity .9s ease .05s, transform .9s cubic-bezier(.4,0,.2,1) .05s;
     scroll-snap-type:y proximity;
   }
-  .reading-stage.visible{ opacity:1; pointer-events:auto; transform:translateY(0); }
+  .reading-stage.visible{ opacity:1; pointer-events:auto; transform:none; }
 
   .letter-scroll{
     max-width:var(--letter-width); margin:72px auto 140px; padding:0 16px;
@@ -626,15 +626,20 @@
   .yes-btn:focus-visible{ outline:2px solid var(--gold); outline-offset:4px; }
 
   .no-btn{
-    position:absolute; top:0; left:0;
+    position:absolute;
     transform:translate(0,0);
     font-family:'Cormorant Garamond',serif; font-style:italic; font-size:.95rem;
     padding:10px 20px; border-radius:999px;
     border:1px solid rgba(122,31,43,.35); background:rgba(239,227,200,.5); color:var(--wax);
     cursor:default; z-index:1;
     pointer-events:none; user-select:none; touch-action:none;
-    transition:left .22s cubic-bezier(.2,.9,.2,1), top .22s cubic-bezier(.2,.9,.2,1);
+    transition:left .32s cubic-bezier(.25,.9,.2,1), top .32s cubic-bezier(.25,.9,.2,1);
     will-change:left, top;
+    opacity:0;
+  }
+  .answer-buttons.is-revealed .no-btn{
+    opacity:1;
+    transition:left .32s cubic-bezier(.25,.9,.2,1), top .32s cubic-bezier(.25,.9,.2,1), opacity .4s ease;
   }
 
   .no-buzz-emoji{
@@ -1004,29 +1009,29 @@
     opacity:1; transform:none;
   }
 
-  .finale-page--ask.has-confirmed .finale-reveal{
-    position:fixed; inset:0; z-index:12;
+  .finale-reveal.is-confirmed-screen{
+    position:fixed; inset:0; z-index:55;
     display:block; width:100%; max-width:none;
     padding:0; pointer-events:none;
   }
-  .finale-page--ask.has-confirmed .finale-reveal .confirmed{
+  .finale-reveal.is-confirmed-screen .confirmed{
     position:fixed; left:50%; top:50%;
     width:min(720px,92vw); padding:0; margin:0;
     transform:translate(-50%,-50%);
     opacity:0;
     transition:opacity .9s ease;
   }
-  .finale-page--ask.has-confirmed .finale-reveal.show .confirmed{
+  .finale-reveal.is-confirmed-screen.show .confirmed{
     opacity:1; transform:translate(-50%,-50%);
   }
-  .finale-page--ask.has-confirmed .finale-reveal .signature{
+  .finale-reveal.is-confirmed-screen .signature{
     position:fixed; left:50%; top:75%;
     width:min(720px,92vw); margin:0;
     transform:translate(-50%,-50%);
     opacity:0;
     transition:opacity .9s ease .28s;
   }
-  .finale-page--ask.has-confirmed .finale-reveal.show .signature{
+  .finale-reveal.is-confirmed-screen.show .signature{
     opacity:1; transform:translate(-50%,-50%);
   }
 
@@ -1689,33 +1694,35 @@
     }
 
     function getNoBtnPosition(){
-      const left = parseFloat(noBtn.style.left);
-      const top = parseFloat(noBtn.style.top);
-      const maxLeft = Math.max(answerButtons.clientWidth - noBtn.offsetWidth, 0);
-      const maxTop = Math.max(answerButtons.clientHeight - noBtn.offsetHeight, 0);
+      const containerRect = answerButtons.getBoundingClientRect();
+      const btnRect = noBtn.getBoundingClientRect();
       return {
-        left: Number.isFinite(left) ? left : maxLeft,
-        top: Number.isFinite(top) ? top : 0
+        left: btnRect.left - containerRect.left,
+        top: btnRect.top - containerRect.top,
+        width: btnRect.width,
+        height: btnRect.height
       };
     }
 
     function isPointerOverNoBtn(px, py, pad){
       pad = pad || 0;
       const pos = getNoBtnPosition();
-      const noW = noBtn.offsetWidth;
-      const noH = noBtn.offsetHeight;
-      return px >= pos.left - pad && px <= pos.left + noW + pad &&
-             py >= pos.top - pad && py <= pos.top + noH + pad;
+      return px >= pos.left - pad && px <= pos.left + pos.width + pad &&
+             py >= pos.top - pad && py <= pos.top + pos.height + pad;
     }
 
-    answerStage.addEventListener('click', (e) => {
+    function handleNoBtnProximity(e){
       if (answerConfirmed || answerButtons.style.display === 'none') return;
+      if (!answerButtons.classList.contains('is-revealed')) return;
       if (e.target === yesBtn || yesBtn.contains(e.target)) return;
       updatePointerFromEvent(e);
-      if (isPointerOverNoBtn(lastPointer.x, lastPointer.y, 8)) {
+      if (isPointerOverNoBtn(lastPointer.x, lastPointer.y, 10)) {
         dodge(e, true);
       }
-    });
+    }
+
+    answerStage.addEventListener('pointermove', handleNoBtnProximity);
+    answerStage.addEventListener('touchmove', handleNoBtnProximity, { passive: true });
 
     function boxesOverlap(x, y, w, h, exclude, pad){
       const box = { left:x, top:y, right:x + w, bottom:y + h };
@@ -1734,11 +1741,12 @@
 
     function dodge(e, fromUserAttempt){
       if (answerConfirmed || dodgeLocked || answerButtons.style.display === 'none') return;
+      if (!answerButtons.classList.contains('is-revealed')) return;
       dodgeLocked = true;
-      window.requestAnimationFrame(() => { dodgeLocked = false; });
+      window.setTimeout(() => { dodgeLocked = false; }, 320);
 
-      const pad = 14;
-      const pointerPad = 130;
+      const pad = 16;
+      const pointerPad = fromUserAttempt ? 72 : 0;
       const containerW = answerButtons.clientWidth;
       const containerH = answerButtons.clientHeight;
       const yesRect = yesBtn.getBoundingClientRect();
@@ -1755,57 +1763,59 @@
       const maxLeft = Math.max(containerW - noW, 0);
       const maxTop = Math.max(containerH - noH, 0);
 
-      const btnRect = noBtn.getBoundingClientRect();
-      const selfExclude = {
-        left: btnRect.left - containerRect.left - pad,
-        top: btnRect.top - containerRect.top - pad,
-        right: btnRect.right - containerRect.left + pad,
-        bottom: btnRect.bottom - containerRect.top + pad
-      };
+      const currentPos = getNoBtnPosition();
+      const selfExclude = fromUserAttempt ? {
+        left: currentPos.left - pad,
+        top: currentPos.top - pad,
+        right: currentPos.left + currentPos.width + pad,
+        bottom: currentPos.top + currentPos.height + pad
+      } : null;
 
-      const px = e && e.clientX != null ? e.clientX - containerRect.left : lastPointer.x;
-      const py = e && e.clientY != null ? e.clientY - containerRect.top : lastPointer.y;
-      const pointerExclude = {
+      const px = e && e.clientX != null ? e.clientX - containerRect.left : containerW / 2;
+      const py = e && e.clientY != null ? e.clientY - containerRect.top : containerH / 2;
+      const pointerExclude = fromUserAttempt ? {
         left: px - pointerPad,
         top: py - pointerPad,
         right: px + pointerPad,
         bottom: py + pointerPad
-      };
+      } : null;
 
       const anchorSpots = [
-        { x: 0, y: 0 },
         { x: maxLeft, y: 0 },
         { x: 0, y: maxTop },
         { x: maxLeft, y: maxTop },
+        { x: 0, y: 0 },
         { x: maxLeft * 0.5, y: 0 },
         { x: maxLeft * 0.5, y: maxTop },
         { x: 0, y: maxTop * 0.5 },
         { x: maxLeft, y: maxTop * 0.5 },
-        { x: maxLeft * 0.15, y: maxTop * 0.15 },
-        { x: maxLeft * 0.85, y: maxTop * 0.15 },
-        { x: maxLeft * 0.15, y: maxTop * 0.85 },
-        { x: maxLeft * 0.85, y: maxTop * 0.85 }
+        { x: maxLeft * 0.12, y: maxTop * 0.12 },
+        { x: maxLeft * 0.88, y: maxTop * 0.12 },
+        { x: maxLeft * 0.12, y: maxTop * 0.88 },
+        { x: maxLeft * 0.88, y: maxTop * 0.88 }
       ];
 
-      let x = 0;
-      let y = 0;
+      let x = currentPos.left;
+      let y = currentPos.top;
       let placed = false;
       let bestDist = -1;
 
       const trySpot = (tryX, tryY) => {
-        if (!isValidDodgeSpot(tryX, tryY, noW, noH, yesExclude, pointerExclude, selfExclude, 0)) return;
-        const dist = Math.hypot(tryX + noW / 2 - px, tryY + noH / 2 - py);
+        const clampedX = Math.max(0, Math.min(tryX, maxLeft));
+        const clampedY = Math.max(0, Math.min(tryY, maxTop));
+        if (!isValidDodgeSpot(clampedX, clampedY, noW, noH, yesExclude, pointerExclude, selfExclude, 0)) return;
+        const dist = Math.hypot(clampedX + noW / 2 - px, clampedY + noH / 2 - py);
         if (dist > bestDist) {
           bestDist = dist;
-          x = tryX;
-          y = tryY;
+          x = clampedX;
+          y = clampedY;
           placed = true;
         }
       };
 
       anchorSpots.forEach((spot) => trySpot(spot.x, spot.y));
 
-      for (let i = 0; i < 120; i += 1) {
+      for (let i = 0; i < 160; i += 1) {
         trySpot(Math.random() * maxLeft, Math.random() * maxTop);
       }
 
@@ -1815,6 +1825,11 @@
         trySpot(awayX, awayY);
         trySpot(awayX, maxTop - awayY);
         trySpot(maxLeft - awayX, awayY);
+        for (let i = 0; i < 80; i += 1) {
+          if (isValidDodgeSpot(i % 2 ? maxLeft : 0, Math.random() * maxTop, noW, noH, yesExclude, null, null, 0)) {
+            trySpot(i % 2 ? maxLeft : 0, Math.random() * maxTop);
+          }
+        }
       }
 
       noBtn.style.left = x + 'px';
@@ -1826,6 +1841,12 @@
         const screenY = e && e.clientY != null ? e.clientY : containerRect.top + py;
         triggerNoBuzz(screenX, screenY);
       }
+    }
+
+    function placeNoBtnInitially(){
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => dodge(null, false));
+      });
     }
 
     const questionBox = document.getElementById('questionBox');
@@ -1947,11 +1968,8 @@
       window.setTimeout(() => {
         answerStage.classList.remove('is-locked');
         answerButtons.classList.add('is-revealed');
+        placeNoBtnInitially();
       }, reduced ? 0 : 4200);
-
-      window.setTimeout(() => {
-        dodge(null, false);
-      }, reduced ? 0 : 5000);
     }
 
     questionBox.addEventListener('click', openQuestionBox);
@@ -1977,9 +1995,11 @@
 
       crossfadeToWalk(AUDIO_CROSSFADE_MS);
 
+      finaleReveal.classList.add('is-confirmed-screen');
+      document.body.appendChild(finaleReveal);
+
       requestAnimationFrame(() => {
         finaleReveal.classList.add('show');
-        document.getElementById('askPage').scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
 

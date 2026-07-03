@@ -1,0 +1,18 @@
+---
+description: Commit and push to GitHub after each code change in this project
+alwaysApply: true
+---
+
+# Auto commit and push
+
+After completing any code change in this repository:
+
+1. Run `git status` and `git diff` to review what changed.
+2. Stage only relevant project files (never `.env`, secrets, or `.DS_Store`).
+3. Create a concise commit message focused on **why** the change was made.
+4. Commit, then `git push origin main` (or the current branch's upstream).
+5. Briefly tell the user the commit hash/message and that it was pushed.
+
+Do this at the end of every implementation turn unless the user explicitly says not to commit yet.
+
+Do not amend pushed commits. Do not force-push.
