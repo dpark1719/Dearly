@@ -1284,6 +1284,7 @@
         <audio id="recordAudio" src="if-it-is-you.mp3" preload="metadata"></audio>
         <audio id="walkAudio" src="do-you-want-to-walk-with-me.mp3" preload="metadata"></audio>
         <audio id="eclipseAudio" src="eclipse.mp3" preload="metadata"></audio>
+        <audio id="eoheoAudio" src="eoheo.wav" preload="auto"></audio>
       </div>
 
       <div class="letter-crease reveal" aria-hidden="true">
@@ -1665,7 +1666,7 @@
     let buzzAudioCtx = null;
     let buzzBuffer = null;
     let buzzHtmlAudio = null;
-    let buzzKoVoice = null;
+    let eoheoAudio = null;
 
     function gameShowBuzzSample(t, duration){
       const progress = Math.min(t / duration, 1);
@@ -1723,29 +1724,12 @@
       return new Blob([buffer], { type: 'audio/wav' });
     }
 
-    function pickBuzzKoVoice(){
-      const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-      return voices.find(v => /ko/i.test(v.lang) && /male|man|junior|jin|hyun|minsu|yong|seok/i.test(v.name))
-        || voices.find(v => /ko-KR/i.test(v.lang) && !/female|woman|girl|yuna|sora/i.test(v.name))
-        || voices.find(v => /^ko/i.test(v.lang))
-        || null;
-    }
-
-    function loadBuzzKoVoice(){
-      if (!window.speechSynthesis) return;
-      buzzKoVoice = pickBuzzKoVoice();
-      window.speechSynthesis.addEventListener('voiceschanged', () => {
-        buzzKoVoice = pickBuzzKoVoice();
-      }, { once: true });
-    }
-    loadBuzzKoVoice();
-
     function primeBuzzAudio(){
-      loadBuzzKoVoice();
       if (!buzzHtmlAudio) {
         buzzHtmlAudio = new Audio(URL.createObjectURL(createBuzzWavBlob()));
         buzzHtmlAudio.preload = 'auto';
       }
+      if (!eoheoAudio) eoheoAudio = document.getElementById('eoheoAudio');
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (Ctx) {
         if (!buzzAudioCtx) buzzAudioCtx = new Ctx();
@@ -1764,11 +1748,13 @@
       buzzHtmlAudio.volume = 0.0001;
       buzzHtmlAudio.currentTime = 0;
       buzzHtmlAudio.play().catch(() => {});
-      if (window.speechSynthesis) {
-        const warm = new SpeechSynthesisUtterance('\u200b');
-        warm.volume = 0.01;
-        warm.lang = 'ko-KR';
-        window.speechSynthesis.speak(warm);
+      if (eoheoAudio) {
+        eoheoAudio.volume = 0.0001;
+        eoheoAudio.currentTime = 0;
+        eoheoAudio.play().then(() => {
+          eoheoAudio.pause();
+          eoheoAudio.currentTime = 0;
+        }).catch(() => {});
       }
     }
 
@@ -1800,17 +1786,12 @@
       if (!playBuzzWithWebAudio(0.92)) playBuzzWithHtmlAudio(0.95);
     }
 
-    function speakEoheo(){
-      if (!window.speechSynthesis) return;
-      if (!buzzKoVoice) buzzKoVoice = pickBuzzKoVoice();
-      window.speechSynthesis.cancel();
-      const line = new SpeechSynthesisUtterance('어허');
-      line.lang = 'ko-KR';
-      line.pitch = 0.42;
-      line.rate = 0.72;
-      line.volume = 1;
-      if (buzzKoVoice) line.voice = buzzKoVoice;
-      window.speechSynthesis.speak(line);
+    function playEoheo(){
+      if (!eoheoAudio) eoheoAudio = document.getElementById('eoheoAudio');
+      const src = eoheoAudio && eoheoAudio.src ? eoheoAudio.src : 'eoheo.wav';
+      const clip = new Audio(src);
+      clip.volume = 0.98;
+      clip.play().catch(() => {});
     }
     document.addEventListener('pointerdown', primeBuzzAudio, { once: true, passive: true });
 
@@ -1840,7 +1821,7 @@
       if (now - noBuzzLast < 1100) return;
       noBuzzLast = now;
       playWrongAnswerBuzz();
-      window.setTimeout(speakEoheo, 260);
+      window.setTimeout(playEoheo, 300);
       spawnNoBuzzEmoji(clientX, clientY);
     }
     let answerConfirmed = false;
