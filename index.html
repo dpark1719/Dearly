@@ -1655,6 +1655,8 @@
     let eoheoAudio = null;
     let eoheoBuffer = null;
     let eoheoLoadPromise = null;
+    let eoheoSourceNode = null;
+    let activeEoheoClip = null;
     let noBuzzMusicCut = false;
 
     const BUZZ_DURATION_MS = 420;
@@ -1799,6 +1801,18 @@
       if (!playBuzzWithWebAudio(0.92)) playBuzzWithHtmlAudio(0.95);
     }
 
+    function stopEoheo(){
+      if (eoheoSourceNode) {
+        try { eoheoSourceNode.stop(); } catch (_) {}
+        eoheoSourceNode = null;
+      }
+      if (activeEoheoClip) {
+        activeEoheoClip.pause();
+        activeEoheoClip.currentTime = 0;
+        activeEoheoClip = null;
+      }
+    }
+
     function playEoheoFromBuffer(){
       if (!buzzAudioCtx || !eoheoBuffer) return false;
       if (buzzAudioCtx.state === 'suspended') buzzAudioCtx.resume();
@@ -1809,6 +1823,10 @@
         gain.gain.value = 1;
         src.connect(gain);
         gain.connect(buzzAudioCtx.destination);
+        eoheoSourceNode = src;
+        src.onended = () => {
+          if (eoheoSourceNode === src) eoheoSourceNode = null;
+        };
         src.start();
         return true;
       } catch (_) {
@@ -1816,18 +1834,26 @@
       }
     }
 
-    function playEoheo(){
-      if (playEoheoFromBuffer()) return;
-      const tryBuffer = () => { playEoheoFromBuffer(); };
-      if (eoheoLoadPromise) {
-        eoheoLoadPromise.then(tryBuffer);
-      } else {
-        loadEoheoBuffer().then(tryBuffer);
-      }
+    function playEoheoHtml(){
       if (!eoheoAudio) eoheoAudio = document.getElementById('eoheoAudio');
       const clip = new Audio((eoheoAudio && eoheoAudio.src) || 'eoheo.mp3');
       clip.volume = 1;
+      activeEoheoClip = clip;
       clip.play().catch(() => {});
+    }
+
+    function playEoheo(){
+      stopEoheo();
+      if (playEoheoFromBuffer()) return;
+      if (eoheoLoadPromise) {
+        eoheoLoadPromise.then(() => {
+          if (!playEoheoFromBuffer()) playEoheoHtml();
+        });
+        return;
+      }
+      loadEoheoBuffer().then((buf) => {
+        if (!buf || !playEoheoFromBuffer()) playEoheoHtml();
+      });
     }
 
     function cutMusicForNoBuzz(){
@@ -1873,7 +1899,7 @@
 
     function triggerNoBuzz(clientX, clientY){
       const now = performance.now();
-      if (now - noBuzzLast < 3200) return;
+      if (now - noBuzzLast < 300) return;
       noBuzzLast = now;
       cutMusicForNoBuzz();
       playWrongAnswerBuzz();
@@ -1955,14 +1981,13 @@
       updatePointerFromEvent(e);
 
       if (!noDodgeArmed) {
-        if (!isPointerOverNoBtn(lastPointer.x, lastPointer.y, 6)) {
+        if (!isPointerOverNoBtn(lastPointer.x, lastPointer.y, 4)) {
           noDodgeArmed = true;
         }
         return;
       }
 
       if (isPointerOverNoBtn(lastPointer.x, lastPointer.y, 8)) {
-        noDodgeArmed = false;
         dodge(e, true);
       }
     }
@@ -2056,8 +2081,9 @@
     function dodge(e, fromUserAttempt){
       if (answerConfirmed || dodgeLocked || answerButtons.style.display === 'none') return;
       if (!answerButtons.classList.contains('is-revealed')) return;
+      if (fromUserAttempt) noDodgeArmed = false;
       dodgeLocked = true;
-      window.setTimeout(() => { dodgeLocked = false; }, 420);
+      window.setTimeout(() => { dodgeLocked = false; }, 260);
 
       const bounds = getVisibleDodgeBounds();
       const containerRect = bounds.containerRect;
@@ -2086,6 +2112,16 @@
 
       if (buzzAnchor) {
         triggerNoBuzz(buzzAnchor.x, buzzAnchor.y);
+      }
+
+      if (fromUserAttempt) {
+        requestAnimationFrame(() => {
+          if (!isPointerOverNoBtn(lastPointer.x, lastPointer.y, 4)) {
+            noDodgeArmed = true;
+          } else {
+            noDodgeArmed = false;
+          }
+        });
       }
     }
 
