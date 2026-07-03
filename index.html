@@ -1150,6 +1150,9 @@
               <pattern id="linerPattern" width="8" height="8" patternUnits="userSpaceOnUse">
                 <path d="M0,8 L8,0" stroke="rgba(122,31,43,.08)" stroke-width=".8"/>
               </pattern>
+              <clipPath id="letterSlitClip" clipPathUnits="userSpaceOnUse">
+                <rect x="40" y="0" width="320" height="118"/>
+              </clipPath>
             </defs>
 
             <g filter="url(#envDropShadow)">
@@ -1171,8 +1174,8 @@
               <!-- Inner pocket -->
               <path d="M46,118 L354,118 L354,228 Q200,214 46,228 Z" fill="rgba(20,12,6,.18)"/>
 
-              <!-- Letter slip -->
-              <g class="letter-peek" id="letterPeek" filter="url(#paperTexture)">
+              <!-- Letter slip (clipped at slit — only above opening shows) -->
+              <g class="letter-peek" id="letterPeek" clip-path="url(#letterSlitClip)" filter="url(#paperTexture)">
                 <rect x="54" y="92" width="292" height="152" rx="4" fill="url(#paperGrad)"
                       stroke="rgba(59,42,30,.2)" stroke-width="1"/>
                 <rect x="54" y="92" width="292" height="28" rx="4" fill="rgba(255,255,255,.25)"/>
