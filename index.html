@@ -140,17 +140,7 @@
     display:block; width:100%; height:100%; overflow:visible;
   }
 
-  .letter-peek{
-    opacity:0;
-    transform:translateY(36px);
-    transform-box:fill-box;
-    transform-origin:200px 244px;
-    transition:transform .9s cubic-bezier(.22,1,.36,1), opacity .55s ease;
-  }
-  .letter-peek.revealed{
-    opacity:1;
-    transform:translateY(-50px);
-  }
+  .letter-peek{ display:none; }
 
   .envelope-wrap.is-opening{ animation:none; }
 
@@ -1059,7 +1049,6 @@
     .letter-scroll__shaft{ height:18px; border-radius:9px; }
     .letter-scroll__knob{ width:20px; height:28px; }
     .letter-card{ padding:36px 22px 44px; }
-    .letter-peek.revealed{ transform:translateY(-46px); }
   }
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
@@ -1587,7 +1576,6 @@
   <script>
     const seal = document.getElementById('seal');
     const flap = document.getElementById('flap');
-    const peek = document.getElementById('letterPeek');
     const envWrap = document.querySelector('.envelope-wrap');
     const envStage = document.getElementById('envelopeStage');
     const readStage = document.getElementById('readingStage');
@@ -1598,8 +1586,7 @@
       opened = true;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const flapDelay = reduced ? 0 : 320;
-      const letterDelay = reduced ? 0 : 980;
-      const stageDelay = reduced ? 0 : 2100;
+      const stageDelay = reduced ? 0 : 1400;
 
       envWrap.classList.add('is-opening');
       seal.classList.add('cracked');
@@ -1607,10 +1594,6 @@
       window.setTimeout(() => {
         flap.classList.add('open');
       }, flapDelay);
-
-      window.setTimeout(() => {
-        peek.classList.add('revealed');
-      }, letterDelay);
 
       window.setTimeout(() => {
         envStage.classList.add('stage-hidden');
