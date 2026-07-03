@@ -750,12 +750,23 @@
   .finale-page--ask .answer-stage{ margin-bottom:0; }
   .finale-page--ask.has-confirmed{
     min-height:100dvh; min-height:100vh;
-    justify-content:flex-start; padding:0;
-    scroll-snap-align:none;
+    justify-content:center;
+    padding:48px 24px 80px;
+    scroll-snap-align:start;
   }
   .finale-page--ask.has-confirmed .question-reveal-stage,
   .finale-page--ask.has-confirmed .answer-stage{
     display:none;
+  }
+  .finale-page--ask.has-confirmed .finale-reveal{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:min(12vh,88px);
+    width:min(720px,96vw);
+    margin:0 auto;
+    padding:0 16px 56px;
   }
 
   .question-reveal-stage{
@@ -1012,32 +1023,6 @@
   .finale-reveal.show .confirmed,
   .finale-reveal.show .signature{
     opacity:1; transform:none;
-  }
-
-  .finale-reveal.is-confirmed-screen{
-    position:fixed; inset:0; z-index:55;
-    display:block; width:100%; max-width:none;
-    padding:0; pointer-events:none;
-  }
-  .finale-reveal.is-confirmed-screen .confirmed{
-    position:fixed; left:50%; top:50%;
-    width:min(720px,92vw); padding:0; margin:0;
-    transform:translate(-50%,-50%);
-    opacity:0;
-    transition:opacity .9s ease;
-  }
-  .finale-reveal.is-confirmed-screen.show .confirmed{
-    opacity:1; transform:translate(-50%,-50%);
-  }
-  .finale-reveal.is-confirmed-screen .signature{
-    position:fixed; left:50%; top:75%;
-    width:min(720px,92vw); margin:0;
-    transform:translate(-50%,-50%);
-    opacity:0;
-    transition:opacity .9s ease .28s;
-  }
-  .finale-reveal.is-confirmed-screen.show .signature{
-    opacity:1; transform:translate(-50%,-50%);
   }
 
   .reveal{ opacity:0; transform:translateY(22px); transition:opacity .8s ease, transform .8s ease; }
@@ -2279,16 +2264,15 @@
       answerConfirmed = true;
       clearNoBuzzEmoji();
       confirmedDate.textContent = formatConfirmedDate();
-      document.getElementById('askPage').classList.add('has-confirmed');
+      const askPage = document.getElementById('askPage');
+      askPage.classList.add('has-confirmed');
       const finaleReveal = document.getElementById('finaleReveal');
 
       crossfadeToWalk(AUDIO_CROSSFADE_MS);
 
-      finaleReveal.classList.add('is-confirmed-screen');
-      document.body.appendChild(finaleReveal);
-
       requestAnimationFrame(() => {
         finaleReveal.classList.add('show');
+        askPage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     });
 
