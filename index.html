@@ -1691,8 +1691,8 @@
         noBuzzEmojiEl.setAttribute('aria-hidden', 'true');
         document.body.appendChild(noBuzzEmojiEl);
       }
-      noBuzzEmojiEl.style.left = (clientX + 52) + 'px';
-      noBuzzEmojiEl.style.top = (clientY - 40) + 'px';
+      noBuzzEmojiEl.style.left = clientX + 'px';
+      noBuzzEmojiEl.style.top = clientY + 'px';
       noBuzzEmojiEl.classList.remove('is-settled');
       void noBuzzEmojiEl.offsetWidth;
       noBuzzEmojiEl.classList.add('is-settled');
@@ -1901,14 +1901,21 @@
       const spot = pickDodgeSpot(px, py, fromUserAttempt);
       lastDodgeSpot = { x: spot.x, y: spot.y };
 
+      let buzzAnchor = null;
+      if (fromUserAttempt) {
+        const btnRect = noBtn.getBoundingClientRect();
+        buzzAnchor = {
+          x: btnRect.left + btnRect.width / 2,
+          y: btnRect.top + btnRect.height / 2
+        };
+      }
+
       noBtn.style.left = spot.x + 'px';
       noBtn.style.top = spot.y + 'px';
       noBtn.style.transform = 'translate(0,0)';
 
-      if (fromUserAttempt) {
-        const screenX = e && e.clientX != null ? e.clientX : containerRect.left + px;
-        const screenY = e && e.clientY != null ? e.clientY : containerRect.top + py;
-        triggerNoBuzz(screenX, screenY);
+      if (buzzAnchor) {
+        triggerNoBuzz(buzzAnchor.x, buzzAnchor.y);
       }
     }
 
