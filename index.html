@@ -1665,28 +1665,37 @@
     let buzzAudioCtx = null;
     let buzzBuffer = null;
     let buzzHtmlAudio = null;
+    let buzzKoVoice = null;
+
+    function gameShowBuzzSample(t, duration){
+      const progress = Math.min(t / duration, 1);
+      const attack = Math.min(1, t * 140);
+      const sustain = progress < 0.7 ? 1 : Math.exp(-(progress - 0.7) * 16);
+      const freqA = 220 - 110 * progress;
+      const freqB = 165 - 82 * progress;
+      const squareA = Math.sign(Math.sin(2 * Math.PI * freqA * t)) * 0.58;
+      const squareB = Math.sign(Math.sin(2 * Math.PI * freqB * t)) * 0.42;
+      const rasp = Math.sign(Math.sin(2 * Math.PI * 31 * t)) * 0.14;
+      const grit = Math.sin(t * 9137.3) * 0.07;
+      const wobble = 1 + 0.05 * Math.sin(2 * Math.PI * 18 * t);
+      return (squareA + squareB + rasp + grit) * attack * sustain * wobble * 0.88;
+    }
 
     function synthesizeBuzzBuffer(ctx){
-      const duration = 0.22;
+      const duration = 0.42;
       const sampleRate = ctx.sampleRate;
       const frameCount = Math.floor(sampleRate * duration);
       const buffer = ctx.createBuffer(1, frameCount, sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < frameCount; i += 1) {
-        const t = i / sampleRate;
-        const attack = Math.min(1, t * 70);
-        const decay = Math.exp(-t * 5);
-        const freq = 205 - 60 * (t / duration);
-        const tone = Math.sin(2 * Math.PI * freq * t);
-        const rattle = Math.sign(Math.sin(2 * Math.PI * 42 * t)) * 0.16;
-        data[i] = (tone * 0.58 + rattle) * attack * decay * 0.62;
+        data[i] = gameShowBuzzSample(i / sampleRate, duration);
       }
       return buffer;
     }
 
     function createBuzzWavBlob(){
       const sampleRate = 22050;
-      const duration = 0.22;
+      const duration = 0.42;
       const numSamples = Math.floor(sampleRate * duration);
       const dataSize = numSamples * 2;
       const buffer = new ArrayBuffer(44 + dataSize);
@@ -1708,19 +1717,31 @@
       writeStr(36, 'data');
       view.setUint32(40, dataSize, true);
       for (let i = 0; i < numSamples; i += 1) {
-        const t = i / sampleRate;
-        const attack = Math.min(1, t * 70);
-        const decay = Math.exp(-t * 5);
-        const freq = 205 - 60 * (t / duration);
-        const tone = Math.sin(2 * Math.PI * freq * t);
-        const rattle = Math.sign(Math.sin(2 * Math.PI * 42 * t)) * 0.16;
-        const sample = (tone * 0.58 + rattle) * attack * decay * 0.62;
+        const sample = gameShowBuzzSample(i / sampleRate, duration);
         view.setInt16(44 + i * 2, Math.max(-32767, Math.min(32767, sample * 32767)), true);
       }
       return new Blob([buffer], { type: 'audio/wav' });
     }
 
+    function pickBuzzKoVoice(){
+      const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      return voices.find(v => /ko/i.test(v.lang) && /male|man|junior|jin|hyun|minsu|yong|seok/i.test(v.name))
+        || voices.find(v => /ko-KR/i.test(v.lang) && !/female|woman|girl|yuna|sora/i.test(v.name))
+        || voices.find(v => /^ko/i.test(v.lang))
+        || null;
+    }
+
+    function loadBuzzKoVoice(){
+      if (!window.speechSynthesis) return;
+      buzzKoVoice = pickBuzzKoVoice();
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        buzzKoVoice = pickBuzzKoVoice();
+      }, { once: true });
+    }
+    loadBuzzKoVoice();
+
     function primeBuzzAudio(){
+      loadBuzzKoVoice();
       if (!buzzHtmlAudio) {
         buzzHtmlAudio = new Audio(URL.createObjectURL(createBuzzWavBlob()));
         buzzHtmlAudio.preload = 'auto';
@@ -1743,6 +1764,12 @@
       buzzHtmlAudio.volume = 0.0001;
       buzzHtmlAudio.currentTime = 0;
       buzzHtmlAudio.play().catch(() => {});
+      if (window.speechSynthesis) {
+        const warm = new SpeechSynthesisUtterance('\u200b');
+        warm.volume = 0.01;
+        warm.lang = 'ko-KR';
+        window.speechSynthesis.speak(warm);
+      }
     }
 
     function playBuzzWithWebAudio(gainLevel){
@@ -1769,8 +1796,21 @@
       clip.play().catch(() => {});
     }
 
-    function playQuietBuzzer(){
-      if (!playBuzzWithWebAudio(0.58)) playBuzzWithHtmlAudio(0.72);
+    function playWrongAnswerBuzz(){
+      if (!playBuzzWithWebAudio(0.92)) playBuzzWithHtmlAudio(0.95);
+    }
+
+    function speakEoheo(){
+      if (!window.speechSynthesis) return;
+      if (!buzzKoVoice) buzzKoVoice = pickBuzzKoVoice();
+      window.speechSynthesis.cancel();
+      const line = new SpeechSynthesisUtterance('어허');
+      line.lang = 'ko-KR';
+      line.pitch = 0.42;
+      line.rate = 0.72;
+      line.volume = 1;
+      if (buzzKoVoice) line.voice = buzzKoVoice;
+      window.speechSynthesis.speak(line);
     }
     document.addEventListener('pointerdown', primeBuzzAudio, { once: true, passive: true });
 
@@ -1797,9 +1837,10 @@
 
     function triggerNoBuzz(clientX, clientY){
       const now = performance.now();
-      if (now - noBuzzLast < 340) return;
+      if (now - noBuzzLast < 1100) return;
       noBuzzLast = now;
-      playQuietBuzzer();
+      playWrongAnswerBuzz();
+      window.setTimeout(speakEoheo, 260);
       spawnNoBuzzEmoji(clientX, clientY);
     }
     let answerConfirmed = false;
