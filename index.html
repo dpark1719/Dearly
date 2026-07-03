@@ -1602,7 +1602,7 @@
         window.setTimeout(queueEclipseScrollCheck, 400);
       }, 850);
     }
-    seal.addEventListener('click', openLetter);
+    seal.addEventListener('click', () => { primeBuzzAudio(); openLetter(); });
     seal.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLetter(); }
     });
@@ -1649,39 +1649,116 @@
     let noBuzzLast = 0;
     let noBuzzEmojiEl = null;
     let buzzAudioCtx = null;
-    let buzzAudioPrimed = false;
+    let buzzBuffer = null;
+    let buzzHtmlAudio = null;
 
-    async function primeBuzzAudio(){
-      if (buzzAudioPrimed) return;
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
+    function synthesizeBuzzBuffer(ctx){
+      const duration = 0.22;
+      const sampleRate = ctx.sampleRate;
+      const frameCount = Math.floor(sampleRate * duration);
+      const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < frameCount; i += 1) {
+        const t = i / sampleRate;
+        const attack = Math.min(1, t * 70);
+        const decay = Math.exp(-t * 5);
+        const freq = 205 - 60 * (t / duration);
+        const tone = Math.sin(2 * Math.PI * freq * t);
+        const rattle = Math.sign(Math.sin(2 * Math.PI * 42 * t)) * 0.16;
+        data[i] = (tone * 0.58 + rattle) * attack * decay * 0.62;
+      }
+      return buffer;
+    }
+
+    function createBuzzWavBlob(){
+      const sampleRate = 22050;
+      const duration = 0.22;
+      const numSamples = Math.floor(sampleRate * duration);
+      const dataSize = numSamples * 2;
+      const buffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buffer);
+      const writeStr = (offset, str) => {
+        for (let i = 0; i < str.length; i += 1) view.setUint8(offset + i, str.charCodeAt(i));
+      };
+      writeStr(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, 'data');
+      view.setUint32(40, dataSize, true);
+      for (let i = 0; i < numSamples; i += 1) {
+        const t = i / sampleRate;
+        const attack = Math.min(1, t * 70);
+        const decay = Math.exp(-t * 5);
+        const freq = 205 - 60 * (t / duration);
+        const tone = Math.sin(2 * Math.PI * freq * t);
+        const rattle = Math.sign(Math.sin(2 * Math.PI * 42 * t)) * 0.16;
+        const sample = (tone * 0.58 + rattle) * attack * decay * 0.62;
+        view.setInt16(44 + i * 2, Math.max(-32767, Math.min(32767, sample * 32767)), true);
+      }
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    function primeBuzzAudio(){
+      if (!buzzHtmlAudio) {
+        buzzHtmlAudio = new Audio(URL.createObjectURL(createBuzzWavBlob()));
+        buzzHtmlAudio.preload = 'auto';
+      }
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
         if (!buzzAudioCtx) buzzAudioCtx = new Ctx();
-        if (buzzAudioCtx.state === 'suspended') await buzzAudioCtx.resume();
-        buzzAudioPrimed = buzzAudioCtx.state === 'running';
-      } catch (_) {}
+        if (!buzzBuffer) buzzBuffer = synthesizeBuzzBuffer(buzzAudioCtx);
+        buzzAudioCtx.resume();
+        try {
+          const unlock = buzzAudioCtx.createBufferSource();
+          unlock.buffer = buzzBuffer;
+          const unlockGain = buzzAudioCtx.createGain();
+          unlockGain.gain.value = 0.0001;
+          unlock.connect(unlockGain);
+          unlockGain.connect(buzzAudioCtx.destination);
+          unlock.start();
+        } catch (_) {}
+      }
+      buzzHtmlAudio.volume = 0.0001;
+      buzzHtmlAudio.currentTime = 0;
+      buzzHtmlAudio.play().catch(() => {});
     }
 
-    async function playQuietBuzzer(){
+    function playBuzzWithWebAudio(gainLevel){
+      if (!buzzAudioCtx || !buzzBuffer) return false;
+      if (buzzAudioCtx.state === 'suspended') buzzAudioCtx.resume();
       try {
-        await primeBuzzAudio();
-        if (!buzzAudioCtx || buzzAudioCtx.state !== 'running') return;
-        const t = buzzAudioCtx.currentTime;
-        const osc = buzzAudioCtx.createOscillator();
+        const src = buzzAudioCtx.createBufferSource();
+        src.buffer = buzzBuffer;
         const gain = buzzAudioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(210, t);
-        osc.frequency.exponentialRampToValueAtTime(145, t + 0.1);
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.1, t + 0.012);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-        osc.connect(gain);
+        gain.gain.value = gainLevel;
+        src.connect(gain);
         gain.connect(buzzAudioCtx.destination);
-        osc.start(t);
-        osc.stop(t + 0.15);
-      } catch (_) {}
+        src.start();
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
-    document.addEventListener('pointerdown', () => { primeBuzzAudio(); }, { once: true, passive: true });
+
+    function playBuzzWithHtmlAudio(volume){
+      if (!buzzHtmlAudio || !buzzHtmlAudio.src) return;
+      const clip = new Audio(buzzHtmlAudio.src);
+      clip.volume = volume;
+      clip.play().catch(() => {});
+    }
+
+    function playQuietBuzzer(){
+      if (!playBuzzWithWebAudio(0.58)) playBuzzWithHtmlAudio(0.72);
+    }
+    document.addEventListener('pointerdown', primeBuzzAudio, { once: true, passive: true });
 
     function spawnNoBuzzEmoji(clientX, clientY){
       if (!noBuzzEmojiEl) {
@@ -1800,6 +1877,7 @@
 
     answerStage.addEventListener('pointermove', handleNoBtnProximity);
     answerStage.addEventListener('touchmove', handleNoBtnProximity, { passive: true });
+    answerStage.addEventListener('pointerdown', primeBuzzAudio, { passive: true });
 
     function boxesOverlap(x, y, w, h, exclude, pad){
       const box = { left:x, top:y, right:x + w, bottom:y + h };
@@ -2031,7 +2109,6 @@
     function openQuestionBox(){
       if (questionOpened) return;
       questionOpened = true;
-      primeBuzzAudio();
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       questionBoxHint.hidden = true;
       questionBox.classList.add('opening');
@@ -2056,7 +2133,7 @@
       }, reduced ? 0 : 4200);
     }
 
-    questionBox.addEventListener('click', openQuestionBox);
+    questionBox.addEventListener('click', () => { primeBuzzAudio(); openQuestionBox(); });
     questionBox.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openQuestionBox(); }
     });
