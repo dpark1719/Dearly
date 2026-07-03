@@ -142,14 +142,14 @@
 
   .letter-peek{
     opacity:0;
-    transform:translateY(28px) scale(.94);
+    transform:translateY(36px);
     transform-box:fill-box;
-    transform-origin:center bottom;
+    transform-origin:200px 244px;
     transition:transform .9s cubic-bezier(.22,1,.36,1), opacity .55s ease;
   }
   .letter-peek.revealed{
     opacity:1;
-    transform:translateY(-78px) scale(1.06);
+    transform:translateY(-50px);
   }
 
   .envelope-wrap.is-opening{ animation:none; }
@@ -1059,7 +1059,7 @@
     .letter-scroll__shaft{ height:18px; border-radius:9px; }
     .letter-scroll__knob{ width:20px; height:28px; }
     .letter-card{ padding:36px 22px 44px; }
-    .letter-peek.revealed{ transform:translateY(-68px) scale(1.04); }
+    .letter-peek.revealed{ transform:translateY(-46px); }
   }
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
@@ -1151,7 +1151,7 @@
                 <path d="M0,8 L8,0" stroke="rgba(122,31,43,.08)" stroke-width=".8"/>
               </pattern>
               <clipPath id="letterSlitClip" clipPathUnits="userSpaceOnUse">
-                <rect x="40" y="0" width="320" height="118"/>
+                <path d="M46,118 L94,54 L306,54 L354,118 Z"/>
               </clipPath>
             </defs>
 
@@ -1162,19 +1162,13 @@
               <path d="M22,56 Q18,52 22,48 L378,48 Q382,52 378,56 L378,238 Q382,246 374,248 L26,248 Q18,246 22,238 Z"
                     fill="url(#envBodySheen)" opacity=".6"/>
 
-              <!-- Side folds with depth -->
-              <path d="M22,56 L22,238 L128,128 Z" fill="url(#foldGrad)" opacity=".9"/>
-              <path d="M22,56 L22,238 L128,128 Z" fill="rgba(0,0,0,.12)"/>
-              <path d="M378,56 L378,238 L272,128 Z" fill="url(#foldGrad)" opacity=".9"/>
-              <path d="M378,56 L378,238 L272,128 Z" fill="rgba(0,0,0,.1)"/>
-
               <!-- Liner peek -->
               <path d="M44,112 Q200,104 356,112 L348,124 Q200,118 52,124 Z" fill="url(#linerPattern)" opacity=".5"/>
 
               <!-- Inner pocket -->
               <path d="M46,118 L354,118 L354,228 Q200,214 46,228 Z" fill="rgba(20,12,6,.18)"/>
 
-              <!-- Letter slip (clipped at slit — only above opening shows) -->
+              <!-- Letter slip — clipped to opening above slit only -->
               <g class="letter-peek" id="letterPeek" clip-path="url(#letterSlitClip)" filter="url(#paperTexture)">
                 <rect x="54" y="92" width="292" height="152" rx="4" fill="url(#paperGrad)"
                       stroke="rgba(59,42,30,.2)" stroke-width="1"/>
@@ -1184,6 +1178,12 @@
                 <line x1="86" y1="184" x2="298" y2="184" stroke="rgba(59,42,30,.06)" stroke-width="1"/>
                 <line x1="86" y1="212" x2="240" y2="212" stroke="rgba(59,42,30,.05)" stroke-width="1"/>
               </g>
+
+              <!-- Side folds on top — hide letter in envelope corners -->
+              <path d="M22,56 L22,238 L128,128 Z" fill="url(#foldGrad)" opacity=".9"/>
+              <path d="M22,56 L22,238 L128,128 Z" fill="rgba(0,0,0,.12)"/>
+              <path d="M378,56 L378,238 L272,128 Z" fill="url(#foldGrad)" opacity=".9"/>
+              <path d="M378,56 L378,238 L272,128 Z" fill="rgba(0,0,0,.1)"/>
 
               <!-- Pocket lip -->
               <path d="M38,118 Q200,110 362,118 L354,132 Q200,126 46,132 Z"
