@@ -608,11 +608,15 @@
     padding-top:clamp(48px,12vh,88px);
   }
   .finale-page--ask .answer-stage{
-    flex:1; width:min(720px,96vw);
-    min-height:min(520px,58vh); margin-top:8px;
+    flex:0 0 auto;
+    width:min(720px,96vw);
+    height:min(300px,42vh);
+    min-height:min(300px,42vh);
+    margin-top:8px;
   }
   .finale-page--ask .answer-buttons{
     min-height:100%;
+    overflow:hidden;
   }
   .yes-btn{
     font-family:'Cormorant Garamond',serif; font-size:1.15rem; font-weight:600;
@@ -1629,6 +1633,8 @@
 
     let lastPointer = { x: -9999, y: -9999 };
     let dodgeLocked = false;
+    let noDodgeArmed = true;
+    let lastDodgeSpot = null;
     let noBuzzLast = 0;
     let noBuzzEmojiEl = null;
     let buzzAudioCtx = null;
@@ -1711,12 +1717,62 @@
              py >= pos.top - pad && py <= pos.top + pos.height + pad;
     }
 
+    function getVisibleDodgeBounds(){
+      const containerRect = answerButtons.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const viewTop = vv ? vv.offsetTop : 0;
+      const viewHeight = vv ? vv.height : window.innerHeight;
+      const viewBottom = viewTop + viewHeight;
+      const inset = 10;
+
+      const noW = noBtn.offsetWidth || 160;
+      const noH = noBtn.offsetHeight || 40;
+
+      const minY = Math.max(inset, viewTop - containerRect.top + inset);
+      const maxY = Math.min(
+        containerRect.height - noH - inset,
+        viewBottom - containerRect.top - noH - inset
+      );
+      const minX = inset;
+      const maxX = Math.max(inset, containerRect.width - noW - inset);
+
+      return {
+        minX: Math.min(minX, maxX),
+        maxX,
+        minY: Math.min(minY, maxY),
+        maxY,
+        containerRect,
+        noW,
+        noH
+      };
+    }
+
+    function getYesExclude(bounds, pad){
+      const yesRect = yesBtn.getBoundingClientRect();
+      const cr = bounds.containerRect;
+      return {
+        left: yesRect.left - cr.left - pad,
+        top: yesRect.top - cr.top - pad,
+        right: yesRect.right - cr.left + pad,
+        bottom: yesRect.bottom - cr.top + pad
+      };
+    }
+
     function handleNoBtnProximity(e){
       if (answerConfirmed || answerButtons.style.display === 'none') return;
       if (!answerButtons.classList.contains('is-revealed')) return;
       if (e.target === yesBtn || yesBtn.contains(e.target)) return;
       updatePointerFromEvent(e);
-      if (isPointerOverNoBtn(lastPointer.x, lastPointer.y, 10)) {
+
+      if (!noDodgeArmed) {
+        if (!isPointerOverNoBtn(lastPointer.x, lastPointer.y, 6)) {
+          noDodgeArmed = true;
+        }
+        return;
+      }
+
+      if (isPointerOverNoBtn(lastPointer.x, lastPointer.y, 8)) {
+        noDodgeArmed = false;
         dodge(e, true);
       }
     }
@@ -1739,40 +1795,18 @@
       return true;
     }
 
-    function dodge(e, fromUserAttempt){
-      if (answerConfirmed || dodgeLocked || answerButtons.style.display === 'none') return;
-      if (!answerButtons.classList.contains('is-revealed')) return;
-      dodgeLocked = true;
-      window.setTimeout(() => { dodgeLocked = false; }, 320);
+    function pickDodgeSpot(px, py, fromUserAttempt){
+      const bounds = getVisibleDodgeBounds();
+      const { minX, maxX, minY, maxY, noW, noH, containerRect } = bounds;
+      const yesExclude = getYesExclude(bounds, 18);
+      const rangeX = Math.max(maxX - minX, 0);
+      const rangeY = Math.max(maxY - minY, 0);
 
-      const pad = 16;
-      const pointerPad = fromUserAttempt ? 72 : 0;
-      const containerW = answerButtons.clientWidth;
-      const containerH = answerButtons.clientHeight;
-      const yesRect = yesBtn.getBoundingClientRect();
-      const containerRect = answerButtons.getBoundingClientRect();
-      const yesExclude = {
-        left: yesRect.left - containerRect.left - pad,
-        top: yesRect.top - containerRect.top - pad,
-        right: yesRect.right - containerRect.left + pad,
-        bottom: yesRect.bottom - containerRect.top + pad
-      };
+      if (rangeX <= 0 && rangeY <= 0) {
+        return { x: minX, y: minY, containerRect };
+      }
 
-      const noW = noBtn.offsetWidth;
-      const noH = noBtn.offsetHeight;
-      const maxLeft = Math.max(containerW - noW, 0);
-      const maxTop = Math.max(containerH - noH, 0);
-
-      const currentPos = getNoBtnPosition();
-      const selfExclude = fromUserAttempt ? {
-        left: currentPos.left - pad,
-        top: currentPos.top - pad,
-        right: currentPos.left + currentPos.width + pad,
-        bottom: currentPos.top + currentPos.height + pad
-      } : null;
-
-      const px = e && e.clientX != null ? e.clientX - containerRect.left : containerW / 2;
-      const py = e && e.clientY != null ? e.clientY - containerRect.top : containerH / 2;
+      const pointerPad = fromUserAttempt ? 56 : 0;
       const pointerExclude = fromUserAttempt ? {
         left: px - pointerPad,
         top: py - pointerPad,
@@ -1780,60 +1814,74 @@
         bottom: py + pointerPad
       } : null;
 
-      const anchorSpots = [
-        { x: maxLeft, y: 0 },
-        { x: 0, y: maxTop },
-        { x: maxLeft, y: maxTop },
-        { x: 0, y: 0 },
-        { x: maxLeft * 0.5, y: 0 },
-        { x: maxLeft * 0.5, y: maxTop },
-        { x: 0, y: maxTop * 0.5 },
-        { x: maxLeft, y: maxTop * 0.5 },
-        { x: maxLeft * 0.12, y: maxTop * 0.12 },
-        { x: maxLeft * 0.88, y: maxTop * 0.12 },
-        { x: maxLeft * 0.12, y: maxTop * 0.88 },
-        { x: maxLeft * 0.88, y: maxTop * 0.88 }
-      ];
+      const minDist = fromUserAttempt ? 72 : 40;
+      const candidates = [];
 
-      let x = currentPos.left;
-      let y = currentPos.top;
-      let placed = false;
-      let bestDist = -1;
-
-      const trySpot = (tryX, tryY) => {
-        const clampedX = Math.max(0, Math.min(tryX, maxLeft));
-        const clampedY = Math.max(0, Math.min(tryY, maxTop));
-        if (!isValidDodgeSpot(clampedX, clampedY, noW, noH, yesExclude, pointerExclude, selfExclude, 0)) return;
-        const dist = Math.hypot(clampedX + noW / 2 - px, clampedY + noH / 2 - py);
-        if (dist > bestDist) {
-          bestDist = dist;
-          x = clampedX;
-          y = clampedY;
-          placed = true;
-        }
+      const consider = (x, y) => {
+        if (!isValidDodgeSpot(x, y, noW, noH, yesExclude, pointerExclude, null, 0)) return;
+        const cx = x + noW / 2;
+        const cy = y + noH / 2;
+        const dist = Math.hypot(cx - px, cy - py);
+        if (fromUserAttempt && dist < minDist) return;
+        if (lastDodgeSpot && Math.hypot(x - lastDodgeSpot.x, y - lastDodgeSpot.y) < 48) return;
+        candidates.push({ x, y, dist });
       };
 
-      anchorSpots.forEach((spot) => trySpot(spot.x, spot.y));
-
-      for (let i = 0; i < 160; i += 1) {
-        trySpot(Math.random() * maxLeft, Math.random() * maxTop);
+      for (let i = 0; i < 100; i += 1) {
+        consider(minX + Math.random() * rangeX, minY + Math.random() * rangeY);
       }
 
-      if (!placed) {
-        const awayX = px < containerW / 2 ? maxLeft : 0;
-        const awayY = py < containerH / 2 ? maxTop : 0;
-        trySpot(awayX, awayY);
-        trySpot(awayX, maxTop - awayY);
-        trySpot(maxLeft - awayX, awayY);
-        for (let i = 0; i < 80; i += 1) {
-          if (isValidDodgeSpot(i % 2 ? maxLeft : 0, Math.random() * maxTop, noW, noH, yesExclude, null, null, 0)) {
-            trySpot(i % 2 ? maxLeft : 0, Math.random() * maxTop);
-          }
+      if (fromUserAttempt) {
+        const awayAngle = Math.atan2(py - (minY + rangeY / 2), px - (minX + rangeX / 2)) + Math.PI;
+        for (let i = 0; i < 24; i += 1) {
+          const angle = awayAngle + (Math.random() - 0.5) * 1.4;
+          const radius = 0.35 + Math.random() * 0.55;
+          const cx = minX + rangeX / 2 + Math.cos(angle) * rangeX * radius * 0.5;
+          const cy = minY + rangeY / 2 + Math.sin(angle) * rangeY * radius * 0.5;
+          consider(
+            Math.max(minX, Math.min(cx - noW / 2, maxX)),
+            Math.max(minY, Math.min(cy - noH / 2, maxY))
+          );
         }
       }
 
-      noBtn.style.left = x + 'px';
-      noBtn.style.top = y + 'px';
+      if (!candidates.length) {
+        const yesRect = yesBtn.getBoundingClientRect();
+        const yc = yesRect.top - containerRect.top + yesRect.height / 2 - noH / 2;
+        consider(minX, Math.max(minY, Math.min(yc, maxY)));
+        consider(maxX, Math.max(minY, Math.min(yc, maxY)));
+      }
+
+      if (!candidates.length) {
+        return { x: minX, y: minY, containerRect };
+      }
+
+      candidates.sort((a, b) => b.dist - a.dist);
+      const poolSize = Math.max(4, Math.ceil(candidates.length * 0.45));
+      const pick = candidates[Math.floor(Math.random() * poolSize)];
+      return { x: pick.x, y: pick.y, containerRect };
+    }
+
+    function dodge(e, fromUserAttempt){
+      if (answerConfirmed || dodgeLocked || answerButtons.style.display === 'none') return;
+      if (!answerButtons.classList.contains('is-revealed')) return;
+      dodgeLocked = true;
+      window.setTimeout(() => { dodgeLocked = false; }, 420);
+
+      const bounds = getVisibleDodgeBounds();
+      const containerRect = bounds.containerRect;
+      const px = e && e.clientX != null
+        ? e.clientX - containerRect.left
+        : bounds.minX + (bounds.maxX - bounds.minX) / 2;
+      const py = e && e.clientY != null
+        ? e.clientY - containerRect.top
+        : bounds.minY + (bounds.maxY - bounds.minY) / 2;
+
+      const spot = pickDodgeSpot(px, py, fromUserAttempt);
+      lastDodgeSpot = { x: spot.x, y: spot.y };
+
+      noBtn.style.left = spot.x + 'px';
+      noBtn.style.top = spot.y + 'px';
       noBtn.style.transform = 'translate(0,0)';
 
       if (fromUserAttempt) {
@@ -1845,7 +1893,17 @@
 
     function placeNoBtnInitially(){
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => dodge(null, false));
+        requestAnimationFrame(() => {
+          const bounds = getVisibleDodgeBounds();
+          const yesRect = yesBtn.getBoundingClientRect();
+          const cr = bounds.containerRect;
+          const yesCx = yesRect.left - cr.left + yesRect.width / 2;
+          const yesCy = yesRect.top - cr.top + yesRect.height / 2;
+          dodge({
+            clientX: cr.left + yesCx + 130,
+            clientY: cr.top + yesCy - 40
+          }, false);
+        });
       });
     }
 
